@@ -14,36 +14,40 @@ contract MatchingPennies {
         uint vote;
     }
 
-    mapping(address => uint) balances;
+    mapping(address => uint) private balances;
 
-    mapping(address => bytes32) commitments;
+    mapping(address => bytes32) private commitments;
     address[] private players;
-    Vote[] votes;
+    Vote[] private votes;
     uint private revealPhaseEndTime;
 
     fallback() external {
         emit InvalidFunctionCall("An invalid function was called in this contract! Fallback triggered instead.");
     }
 
+    function resetFailedGameState() public {
+        require(players.length == 2, "This function can only be called in case of a failed game, but the current game still hasn't started!");
+        require(votes.length == 0, "This function can only be called in case of a failed game, but this game has a winner! Please call calculateWinner() instead.");
+        require(revealPhaseEndTime != 0, "This function can only be called in case of a failed game, but there is no game currently in progress!");
+        require(block.timestamp > revealPhaseEndTime, "This function can only be called in case of a failed game, but the current game is still in progress!");
+
+        resetState();
+
+        //  TODO find out if it will be necessary to refund gas or if the delete statements take care of that.
+    }
+
     function joinGame(bytes32 commitment) public payable {
         //  either we are in a clean slate new game or we are resetting a previously full game only AFTER the game time ran out.
-        require(players.length < 2 || (revealPhaseEndTime != 0 && revealPhaseEndTime < block.timestamp), "Game already full! Please join when this round is over!");
+        require(players.length < 2, "Game already full! Please join when this round is over!");
         require(commitments[msg.sender] == 0, "Can't play the game against yourself!");
-        require(msg.value == 1 ether, "Amount sent is NOT 1 ether!");
-
-        //  this means that joinGame was called to reset the game state after the previous game ended with both players griefing
-        if (revealPhaseEndTime != 0) {
-            //  need to reset the state. 
-            assert(players.length == 2);
-            resetState();
-        }
+        require(msg.value == 1 ether, "Amount sent is NOT 1 ether!");        
 
         commitments[msg.sender] = commitment;
         players.push(msg.sender);
         emit PlayerJoined("A new player has joined the game");
 
         if (players.length == 2) {
-            revealPhaseEndTime = add(block.timestamp, 1 hours);
+            revealPhaseEndTime = add(block.timestamp, 1 days);
             emit CommitPhaseOver("The commit phase is now order. Registered players can begin revealing their values. The reveal phase will end in 1 hour.");
         }
     }
@@ -60,7 +64,7 @@ contract MatchingPennies {
             require(votes[0].player != msg.sender, "You have already revealed a value, can't do that again!");
         }
         
-        votes.push(Vote(msg.sender, uint(sha256(abi.encodePacked(_vote)))));
+        votes.push(Vote(msg.sender, bytes(_vote).length));
 
         if (votes.length == 2) emit RevealPhaseOver("Reveal phase over. The winner can now be calculated");
     }

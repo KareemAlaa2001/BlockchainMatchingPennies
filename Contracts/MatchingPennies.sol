@@ -32,8 +32,6 @@ contract MatchingPennies {
         require(block.timestamp > revealPhaseEndTime, "This function can only be called in case of a failed game, but the current game is still in progress!");
 
         resetState();
-
-        //  TODO find out if it will be necessary to refund gas or if the delete statements take care of that.
     }
 
     function joinGame(bytes32 commitment) public payable {
